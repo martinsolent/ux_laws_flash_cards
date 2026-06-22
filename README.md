@@ -5,7 +5,7 @@ An interactive study tool for learning fundamental UX design principles through 
 ## Features
 
 - **Interactive Flash Cards**: Tap any card to flip and reveal detailed explanations
-- **AI-Generated Explanations**: Each law includes AI-generated context with real UI examples
+- **Explanations**: Each law includes context with real UI examples
 - **Category Filtering**: Filter cards by topic:
   - Heuristics & Interaction
   - Gestalt Principles
