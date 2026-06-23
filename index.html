@@ -833,6 +833,29 @@ const TAG_LABELS = {
   principle: "Additional Principles"
 };
 
+const LOCAL_EXPLANATIONS = {
+  "aesthetic-usability": "The Aesthetic-Usability Effect means people often judge attractive interfaces as easier to use. This happens because visual appeal creates positive emotion, which lowers perceived effort and increases patience. In Apple Music, polished album artwork, spacing, and motion make complex browsing feel smoother than it objectively is.",
+  "fitts": "Fitts's Law says targets that are larger and closer are faster to select. This happens because the motor effort and precision required by your hand or cursor decreases as target size increases and distance shrinks. In iOS Safari, the bottom toolbar places primary controls close to your thumb for faster, more accurate taps.",
+  "hick": "Hick's Law means decision time increases as the number of choices grows. This happens because users must compare options and resolve uncertainty before acting. Google Search keeps its first screen simple so users can start quickly instead of choosing from many controls.",
+  "jakob": "Jakob's Law means users expect your interface to work like the products they already know. This happens because familiar mental models reduce learning cost and cognitive friction. Most ecommerce sites place the cart icon in the top-right because shoppers already look there.",
+  "miller": "Miller's Law suggests short-term memory can handle only a limited number of chunks at once. This happens because working memory is capacity-constrained and overloaded lists are harder to retain. One-time password inputs often group digits to reduce memory load during entry.",
+  "parkinson": "Parkinson's Law says work expands to fill the time available. This happens because people calibrate effort to deadlines and leave room for revisions when time seems abundant. Time-boxed design sprints produce clearer outputs because fixed constraints force prioritization.",
+  "proximity": "The Law of Proximity means items near each other are perceived as related. This happens because the visual system groups nearby elements before reading labels. In settings screens, labels and switches are placed tightly together so each pair is understood as one control.",
+  "similarity": "The Law of Similarity means elements that look alike are perceived as part of the same group. This happens because shared color, shape, or size becomes a fast grouping cue in visual processing. In Trello, cards with matching label colors are quickly recognized as related tasks.",
+  "region": "The Law of Common Region means items inside the same boundary feel grouped. This happens because enclosure is a strong perceptual signal of belonging. Dashboard widgets enclosed in cards are interpreted as separate sections even before users read the headings.",
+  "pragnanz": "The Law of Pragnanz means people prefer the simplest stable interpretation of what they see. This happens because perception tends to minimize complexity and ambiguity. Simple icon sets like Material Symbols are recognized faster than highly detailed decorative icons.",
+  "connectedness": "Uniform Connectedness means visually linked elements are perceived as related more strongly than by proximity alone. This happens because explicit connection lines act as direct relational cues for the visual system. In flow builders like Miro, connected nodes are understood as one process at a glance.",
+  "peak-end": "The Peak-End Rule means people remember an experience mostly by its most intense moment and its ending. This happens because memory compresses long sequences into salient emotional snapshots. Ride-hailing apps often end with a clean success state and receipt to leave a strong final impression.",
+  "serial": "The Serial Position Effect means people recall first and last items better than middle items. This happens because early items gain more rehearsal and later items remain in recent memory. Navigation menus often place critical actions at the top or bottom to improve recall.",
+  "vonrestorff": "The Von Restorff Effect means a distinct item is remembered better than similar surrounding items. This happens because perceptual contrast captures attention and strengthens encoding. In pricing tables, one highlighted plan stands out and gets more clicks than adjacent options.",
+  "zeigarnik": "The Zeigarnik Effect means unfinished tasks stay active in memory more than completed tasks. This happens because incomplete goals create cognitive tension that the brain tries to resolve. Progress indicators in onboarding motivate completion by reminding users they are not done yet.",
+  "doherty": "The Doherty Threshold says productivity and satisfaction increase when system response stays under about 400 milliseconds. This happens because fast feedback preserves the user's sense of flow and control. Autocomplete in modern search bars feels good because results update almost instantly while typing.",
+  "occam": "Occam's Razor means the simplest explanation or solution that works is usually best. This happens because simpler systems reduce failure points and cognitive overhead. A single clear checkout path often outperforms a complex flow with many optional branches.",
+  "pareto": "The Pareto Principle says a small share of inputs often creates most outcomes. This happens because value distribution is typically uneven across features and tasks. Product teams often find that a few core workflows drive most daily usage in analytics.",
+  "postel": "Postel's Law means you should accept varied input formats but produce clean, strict output. This happens because tolerant input handling improves interoperability while strict output prevents downstream ambiguity. Form parsers that accept phone numbers with spaces or dashes but store one normalized format follow this rule.",
+  "tesler": "Tesler's Law says every system has a minimum unavoidable complexity and someone must absorb it. This happens because complexity can be moved but not eliminated entirely. Good date pickers hide calendar math from users by handling edge cases in the component logic."
+};
+
 const cache = {};
 const reviewed = new Set();
 let currentFilter = "all";
@@ -848,23 +871,47 @@ function updateProgress() {
 async function fetchExplanation(law) {
   if (cache[law.id]) return cache[law.id];
 
+  const fallbackText = LOCAL_EXPLANATIONS[law.id] || `${law.title} is a UX principle that helps teams design clearer interfaces. It works by reducing cognitive load and making user actions easier to predict. You can apply it by simplifying high-frequency tasks in real product screens.`;
+  const apiKey = (window.ANTHROPIC_API_KEY || localStorage.getItem("anthropic_api_key") || "").trim();
+
+  if (!apiKey) {
+    cache[law.id] = fallbackText;
+    return fallbackText;
+  }
+
   const prompt = `You are a UX educator. In 3–4 sentences, explain "${law.title}" for a computing undergraduate. First sentence: what the principle means. Second sentence: why it happens cognitively or perceptually. Third sentence: give one specific, concrete UI or product example (name a real app, website, or interface). Keep every sentence short. No lists. No headers. Plain prose only.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 220,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "API error");
-  const text = data.content.map(b => b.text || "").join("").trim();
-  cache[law.id] = text;
-  return text;
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error?.message || "API error");
+
+    const text = Array.isArray(data?.content)
+      ? data.content.map(block => block?.text || "").join("").trim()
+      : "";
+
+    if (!text) throw new Error("Empty response content");
+
+    cache[law.id] = text;
+    return text;
+  } catch (err) {
+    console.warn("Falling back to local explanation:", err);
+    cache[law.id] = fallbackText;
+    return fallbackText;
+  }
 }
 
 function buildCard(law) {
